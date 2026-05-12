@@ -23,8 +23,15 @@ jobs:
       run: |
         cordova create app com.sirsalman.myapp MyApp
         cp index.html app/www/index.html
+
         cd app
+
         cordova platform add android
+
+        # PDF + Storage plugins
+        cordova plugin add cordova-plugin-file
+        cordova plugin add cordova-plugin-file-opener2
+
         cordova build android
 
     - name: Upload APK
