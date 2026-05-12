@@ -52,8 +52,8 @@
         <button class="btn" id="generateBtn" onclick="generateStyledPDF()">Print & Save PDF</button>
     </div>
 
-    <textarea id="textInput" dir="auto" placeholder="Paste your AI chat here..." maxlength="100000"></textarea>
-    <div class="footer-info"><span id="charCount">Characters: 0 / 100,000</span></div>
+    <textarea id="textInput" dir="auto" placeholder="Paste your AI chat here..."></textarea>
+    <div class="footer-info"><span id="charCount">Characters: 0</span></div>
 </div>
 
 <div id="helpModal" class="modal">
@@ -81,7 +81,8 @@
     marked.setOptions({ breaks: true, gfm: true });
 
     textarea.addEventListener('input', () => {
-        charCount.innerText = `Characters: ${textarea.value.length} / 100,000`;
+        // Infinite character counter
+        charCount.innerText = `Characters: ${textarea.value.length}`;
     });
 
     function toggleModal(show) { 
@@ -110,10 +111,9 @@
         generateBtn.innerText = "Processing...";
         generateBtn.disabled = true;
 
-        // Parse markdown to HTML
         printArea.innerHTML = marked.parse(rawText);
 
-        const fileName = 'Akira_Parsed_Document_' + new Date().getTime() + '.pdf';
+        const fileName = 'Akira_Document_' + new Date().getTime() + '.pdf';
         
         const opt = {
             margin: 15,
@@ -124,9 +124,9 @@
         };
 
         if (window.cordova) {
-            // Android Cordova Environment
-            showToast("Checking permissions...", "info");
-            checkAndroidPermissionsAndSave(opt, fileName);
+            // Android Cordova Environment - Straight to cache, no permissions needed
+            showToast("Generating PDF...", "info");
+            generateAndSaveCordova(opt, fileName);
         } else {
             // Standard Browser Environment
             showToast("Downloading via Browser...", "info");
@@ -140,34 +140,7 @@
         }
     }
 
-    function checkAndroidPermissionsAndSave(opt, fileName) {
-        var permissions = cordova.plugins.permissions;
-        
-        // Request Storage Permissions for Android
-        permissions.checkPermission(permissions.WRITE_EXTERNAL_STORAGE, function(status) {
-            if (status.hasPermission) {
-                generateAndSaveCordova(opt, fileName);
-            } else {
-                permissions.requestPermission(permissions.WRITE_EXTERNAL_STORAGE, function(status) {
-                    if (status.hasPermission) {
-                        generateAndSaveCordova(opt, fileName);
-                    } else {
-                        // Android 13+ bypass: WRITE_EXTERNAL_STORAGE is deprecated, so we try anyway for public Downloads folder
-                        showToast("Warning: Storage permission denied. Trying public folder directly.", "warning");
-                        generateAndSaveCordova(opt, fileName);
-                    }
-                }, function() {
-                    showToast("Error requesting permissions.", "error");
-                    resetBtn();
-                });
-            }
-        });
-    }
-
     function generateAndSaveCordova(opt, fileName) {
-        showToast("Generating PDF engine...", "info");
-
-        // Convert HTML to Base64 PDF
         html2pdf().set(opt).from(printArea).output('datauristring').then(function(pdfBase64) {
             
             const base64Data = pdfBase64.split(',')[1];
@@ -181,24 +154,24 @@
             }
             const blob = new Blob(byteArrays, { type: 'application/pdf' });
 
-            // REAL Downloads Folder Path
-            const storageLocation = cordova.file.externalRootDirectory + 'Download/';
+            // CACHE DIRECTORY: Bypasses Android 10/11/13 storage permissions completely!
+            const storageLocation = cordova.file.cacheDirectory;
             
             window.resolveLocalFileSystemURL(storageLocation, function(dirEntry) {
                 dirEntry.getFile(fileName, { create: true, exclusive: false }, function(fileEntry) {
                     fileEntry.createWriter(function(fileWriter) {
                         
                         fileWriter.onwriteend = function() {
-                            showToast("Saved permanently to Downloads folder!", "success");
+                            showToast("Opening in PDF Viewer...", "success");
                             
-                            // Open PDF natively
+                            // Natively khul jayega, wahan se manually save kar lena
                             cordova.plugins.fileOpener2.open(
                                 fileEntry.nativeURL,
                                 'application/pdf',
                                 {
                                     error: function(e) { 
                                         console.error('File open error:', e);
-                                        showToast("Saved, but no native viewer found.", "warning");
+                                        showToast("PDF ban gaya par koi viewer nahi mila.", "warning");
                                     },
                                     success: function() { console.log('Opened natively'); }
                                 }
@@ -214,9 +187,9 @@
                         fileWriter.write(blob);
                         
                     }, function(err) { showToast("File Writer Error", "error"); resetBtn(); });
-                }, function(err) { showToast("File Creation Error in Downloads", "error"); resetBtn(); });
+                }, function(err) { showToast("File Creation Error", "error"); resetBtn(); });
             }, function(err) { 
-                showToast("Cannot access Android Downloads folder.", "error"); 
+                showToast("Cannot access app cache.", "error"); 
                 resetBtn();
             });
 
