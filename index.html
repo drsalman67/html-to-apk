@@ -34,11 +34,6 @@
         .toast.error { border-left-color: #ef4444; }
         .toast.warning { border-left-color: #f59e0b; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-        /* Hidden Print Area used for PDF rendering */
-        #printArea { position: absolute; left: -9999px; top: -9999px; width: 800px; background: white; color: black; padding: 40px; font-size: 12pt; line-height: 1.6; }
-        #printArea table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-        #printArea th, #printArea td { border: 1px solid #ccc; padding: 8px; }
     </style>
 </head>
 <body>
@@ -67,13 +62,10 @@
     </div>
 </div>
 
-<div id="printArea" dir="auto"></div>
-
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
     const textarea = document.getElementById('textInput');
-    const printArea = document.getElementById('printArea');
     const charCount = document.getElementById('charCount');
     const generateBtn = document.getElementById('generateBtn');
     const toastContainer = document.getElementById('toastContainer');
@@ -81,7 +73,6 @@
     marked.setOptions({ breaks: true, gfm: true });
 
     textarea.addEventListener('input', () => {
-        // Infinite character counter
         charCount.innerText = `Characters: ${textarea.value.length}`;
     });
 
@@ -111,7 +102,25 @@
         generateBtn.innerText = "Processing...";
         generateBtn.disabled = true;
 
-        printArea.innerHTML = marked.parse(rawText);
+        const parsedHTML = marked.parse(rawText);
+
+        // Virtual Engine: Dynamically generating PDF structure instead of relying on hidden divs
+        const printContent = `
+            <div dir="auto" style="padding: 20px; background: #ffffff; color: #000000; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 12pt; line-height: 1.6;">
+                <style>
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+                    th, td { border: 1px solid #cccccc; padding: 8px; text-align: left; }
+                    th { background-color: #f8fafc; }
+                    h1, h2, h3 { color: #111827; margin-bottom: 10px; }
+                    p { margin-bottom: 12px; }
+                    code { background: #f1f5f9; padding: 3px 6px; border-radius: 4px; font-family: monospace; color: #e11d48; }
+                    pre { background: #f1f5f9; padding: 15px; border-radius: 6px; overflow-x: auto; color: #0f172a; border: 1px solid #e2e8f0; }
+                    pre code { background: transparent; color: inherit; padding: 0; }
+                    blockquote { border-left: 4px solid #cbd5e1; margin: 0 0 15px 0; padding-left: 15px; color: #475569; font-style: italic; }
+                </style>
+                ${parsedHTML}
+            </div>
+        `;
 
         const fileName = 'Akira_Document_' + new Date().getTime() + '.pdf';
         
@@ -124,13 +133,11 @@
         };
 
         if (window.cordova) {
-            // Android Cordova Environment - Straight to cache, no permissions needed
             showToast("Generating PDF...", "info");
-            generateAndSaveCordova(opt, fileName);
+            generateAndSaveCordova(opt, printContent, fileName);
         } else {
-            // Standard Browser Environment
             showToast("Downloading via Browser...", "info");
-            html2pdf().set(opt).from(printArea).save().then(() => {
+            html2pdf().set(opt).from(printContent).save().then(() => {
                 showToast("PDF Downloaded!", "success");
                 resetBtn();
             }).catch(err => {
@@ -140,8 +147,9 @@
         }
     }
 
-    function generateAndSaveCordova(opt, fileName) {
-        html2pdf().set(opt).from(printArea).output('datauristring').then(function(pdfBase64) {
+    function generateAndSaveCordova(opt, printContent, fileName) {
+        // Here we pass the raw HTML string directly to html2pdf, avoiding CSS visibility issues completely
+        html2pdf().set(opt).from(printContent).output('datauristring').then(function(pdfBase64) {
             
             const base64Data = pdfBase64.split(',')[1];
             const byteCharacters = atob(base64Data);
@@ -154,7 +162,6 @@
             }
             const blob = new Blob(byteArrays, { type: 'application/pdf' });
 
-            // CACHE DIRECTORY: Bypasses Android 10/11/13 storage permissions completely!
             const storageLocation = cordova.file.cacheDirectory;
             
             window.resolveLocalFileSystemURL(storageLocation, function(dirEntry) {
@@ -164,14 +171,13 @@
                         fileWriter.onwriteend = function() {
                             showToast("Opening in PDF Viewer...", "success");
                             
-                            // Natively khul jayega, wahan se manually save kar lena
                             cordova.plugins.fileOpener2.open(
                                 fileEntry.nativeURL,
                                 'application/pdf',
                                 {
                                     error: function(e) { 
                                         console.error('File open error:', e);
-                                        showToast("PDF ban gaya par koi viewer nahi mila.", "warning");
+                                        showToast("PDF ready, but no viewer found.", "warning");
                                     },
                                     success: function() { console.log('Opened natively'); }
                                 }
@@ -206,4 +212,4 @@
     }
 </script>
 </body>
-</html>
+</html> 
